@@ -7,3 +7,4 @@ sqlalchemy
 uvicorn
 python-dotenv
 email-validator
+persiantools

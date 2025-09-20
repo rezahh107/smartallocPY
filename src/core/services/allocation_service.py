@@ -7,7 +7,6 @@ from typing import Dict, Iterable, List, Optional
 from ..models.assignment import Assignment, AssignmentStatus
 from ..models.mentor import Mentor
 from ..models.student import Student
-from ..utils.mobile_normalizer import normalize_mobile_number
 from ...config.settings import get_settings
 from .counter_service import CounterService
 
@@ -17,7 +16,7 @@ class AllocationError(Exception):
 
 
 class AllocationService:
-    """Allocate students to mentors based on capacity and preferences."""
+    """Allocate students to mentors based on capacity constraints."""
 
     def __init__(
         self,
@@ -44,8 +43,6 @@ class AllocationService:
         allocations: List[Assignment] = []
 
         for student in active_students:
-            if student.mobile_number:
-                student.mobile_number = normalize_mobile_number(student.mobile_number)
             mentor_id = self._select_mentor(student, remaining_capacity, mentor_lookup)
             if mentor_id is None:
                 continue
@@ -53,7 +50,7 @@ class AllocationService:
             allocations.append(
                 Assignment(
                     assignment_id=self.counter.next(),
-                    student_id=student.student_id,
+                    student_id=student.national_id,
                     mentor_id=mentor_id,
                     status=AssignmentStatus.CONFIRMED,
                 )
@@ -67,10 +64,6 @@ class AllocationService:
         mentors: Dict[str, Mentor],
     ) -> Optional[str]:
         """Select the most suitable mentor for the student."""
-
-        for preference in student.preferences:
-            if remaining_capacity.get(preference, 0) > 0:
-                return preference
 
         available = [
             (capacity, mentor_id)

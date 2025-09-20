@@ -5,9 +5,35 @@ from src.core.models.mentor import Mentor
 from src.core.models.student import Student
 
 
+def _student_payload(**overrides):
+    payload = {
+        "national_id": "0013542419",
+        "first_name": "علی   احمد",
+        "last_name": "رضایی",
+        "gender": 1,
+        "edu_status": 1,
+        "reg_center": 1,
+        "reg_status": 0,
+        "group_code": 105,
+        "mobile": "+989121234567",
+    }
+    payload.update(overrides)
+    return payload
+
+
 def test_student_full_name():
-    student = Student(id="s1", first_name="Ali", last_name="Rezaei")
-    assert student.full_name == "Ali Rezaei"
+    student = Student(**_student_payload())
+    assert student.first_name == "علی احمد"
+    assert student.mobile == "09121234567"
+    assert student.display_name == "رضایی، علی احمد"
+    assert student.full_name == "علی احمد رضایی".replace("  ", " ").strip()
+    assert student.student_type == 0
+    assert "display_name" not in student.to_dict()
+
+
+def test_student_is_assignable_respects_registration_status():
+    student = Student(**_student_payload(reg_status=3))
+    assert student.is_assignable() is False
 
 
 def test_mentor_has_capacity():
