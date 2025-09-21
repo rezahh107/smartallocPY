@@ -37,6 +37,14 @@ def test_student_handles_zero_school_codes():
     assert student.student_type == 0
 
 
+def test_student_handles_empty_school_code_string():
+    Student.SPECIAL_SCHOOLS = frozenset({98765})
+    student = Student(**_student_payload(school_code=""))
+
+    assert student.school_code is None
+    assert student.student_type == 0
+
+
 def test_student_rejects_invalid_national_id():
     Student.SPECIAL_SCHOOLS = frozenset()
     payload = _student_payload(national_id="1111111111")
@@ -51,6 +59,13 @@ def test_student_is_assignable_respects_hakmat_code():
     Student.SPECIAL_SCHOOLS = frozenset()
     student = Student(**_student_payload(reg_status=3))
     assert student.is_assignable() is True
+
+
+def test_student_mobile_accepts_double_zero_prefix():
+    Student.SPECIAL_SCHOOLS = frozenset()
+    student = Student(**_student_payload(mobile="00989129876543"))
+
+    assert student.mobile == "09129876543"
 
 
 def test_mentor_capacity_and_acceptance():
