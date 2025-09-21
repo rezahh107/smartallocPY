@@ -72,7 +72,12 @@ class Student(BaseModel):
     national_id: str = Field(
         ...,
         description="کد ملی ۱۰ رقمی",
-        validation_alias=AliasChoices("national_id", "کدملی", "کد ملی"),
+        validation_alias=AliasChoices(
+            "national_id",
+            "کدملی",
+            "کد ملی",
+            "کد‌ملی",
+        ),
         serialization_alias="کدملی",
     )
     gender: int = Field(
@@ -120,6 +125,7 @@ class Student(BaseModel):
             "mobile_number",
             "تلفن همراه داوطلب",
             "شماره موبایل",
+            "شماره همراه",
         ),
         serialization_alias="تلفن همراه داوطلب",
     )
@@ -348,7 +354,11 @@ class Student(BaseModel):
     def to_dict(self) -> dict[str, Any]:
         """Return a plain dictionary excluding computed fields."""
 
-        return self.model_dump(by_alias=True, exclude={"student_type"})
+        return self.model_dump(
+            by_alias=True,
+            exclude={"student_type"},
+            exclude_none=True,
+        )
 
 
 def test_special_school_student_type() -> None:
@@ -381,6 +391,24 @@ def test_school_code_normalization_zero_values() -> None:
         reg_status=1,
         group_code=2,
         school_code="0",
+        mobile="09123456789",
+    )
+    assert student.school_code is None
+    assert student.student_type == 0
+
+
+def test_school_code_empty_string_results_in_general_student_type() -> None:
+    """Empty school codes normalize to None without flagging special type."""
+
+    Student.SPECIAL_SCHOOLS = frozenset({283})
+    student = Student(
+        national_id="0012345679",
+        gender=0,
+        edu_status=0,
+        reg_center=1,
+        reg_status=1,
+        group_code=2,
+        school_code="",
         mobile="09123456789",
     )
     assert student.school_code is None
@@ -442,6 +470,23 @@ def test_mobile_normalization_accepts_double_zero_prefix() -> None:
     assert student.mobile == "09121234567"
 
 
+def test_mobile_normalization_with_mixed_persian_digits() -> None:
+    """Ensure Persian digits and international prefix normalize correctly."""
+
+    Student.SPECIAL_SCHOOLS = frozenset()
+    student = Student(
+        national_id="0045678912",
+        gender=0,
+        edu_status=1,
+        reg_center=1,
+        reg_status=1,
+        group_code=6,
+        school_code=None,
+        mobile="0098۹۱۲۳۴۵۶۷۸۹",
+    )
+    assert student.mobile == "09123456789"
+
+
 def test_national_id_checksum_validation() -> None:
     """Invalid national IDs should raise a Persian error message."""
 
@@ -462,6 +507,27 @@ def test_national_id_checksum_validation() -> None:
         assert "کد ملی نامعتبر است" in str(error)
     else:  # pragma: no cover - defensive
         raise AssertionError("Expected ValidationError for invalid national ID")
+
+
+def test_serialization_excludes_none_and_uses_aliases() -> None:
+    """Serialized output should rely on Persian aliases and drop None fields."""
+
+    Student.SPECIAL_SCHOOLS = frozenset({283})
+    student = Student(
+        national_id="0012345679",
+        gender=1,
+        edu_status=1,
+        reg_center=0,
+        reg_status=3,
+        group_code=2,
+        school_code=None,
+        mobile="09123456789",
+    )
+    data = student.to_dict()
+    assert "student_type" not in data
+    assert "مدرسه نهایی" not in data
+    assert data["کدملی"] == "0012345679"
+    assert data["جنسیت"] == 1
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution
