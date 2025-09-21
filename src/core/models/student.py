@@ -113,8 +113,8 @@ class Student(BaseModel):
     school_code: Optional[int] = Field(
         default=None,
         description="کد مدرسه نهایی",
-        validation_alias=AliasChoices("school_code", "مدرسه نهایی"),
-        serialization_alias="مدرسه نهایی",
+        validation_alias=AliasChoices("school_code", "مدرسه نهایی", "کد مدرسه"),
+        serialization_alias="کد مدرسه",
     )
     mobile: str = Field(
         ...,
@@ -420,7 +420,7 @@ def test_mobile_normalization_and_counter_validation() -> None:
 
     Student.SPECIAL_SCHOOLS = frozenset()
     student = Student(
-        national_id="0023456789",
+        national_id="1000000001",
         gender=1,
         edu_status=1,
         reg_center=2,
@@ -458,7 +458,7 @@ def test_mobile_normalization_accepts_double_zero_prefix() -> None:
 
     Student.SPECIAL_SCHOOLS = frozenset()
     student = Student(
-        national_id="0045678912",
+        national_id="1000000011",
         gender=0,
         edu_status=1,
         reg_center=1,
@@ -475,7 +475,7 @@ def test_mobile_normalization_with_mixed_persian_digits() -> None:
 
     Student.SPECIAL_SCHOOLS = frozenset()
     student = Student(
-        national_id="0045678912",
+        national_id="1000000028",
         gender=0,
         edu_status=1,
         reg_center=1,
@@ -526,21 +526,58 @@ def test_serialization_excludes_none_and_uses_aliases() -> None:
     data = student.to_dict()
     assert "student_type" not in data
     assert "مدرسه نهایی" not in data
+    assert "کد مدرسه" not in data
     assert data["کدملی"] == "0012345679"
     assert data["جنسیت"] == 1
 
 
+def test_school_code_persian_alias_enables_special_student_type() -> None:
+    """The new Persian alias should populate the field and student type."""
+
+    Student.SPECIAL_SCHOOLS = frozenset({283})
+    student = Student(
+        **{
+            "کد مدرسه": 283,
+            "کدملی": "0012345679",
+            "جنسیت": 1,
+            "وضعیت تحصیلی": 1,
+            "مرکز ثبت نام": 0,
+            "وضعیت ثبت نام": 0,
+            "گروه آزمایشی نهایی": 3,
+            "تلفن همراه داوطلب": "09123456789",
+        }
+    )
+    assert student.school_code == 283
+    assert student.student_type == 1
+    data = student.to_dict()
+    assert data["کد مدرسه"] == 283
+    assert "مدرسه نهایی" not in data
+
+
+def test_school_code_persian_alias_handles_empty_string() -> None:
+    """Empty strings via the new alias should normalize to None in serialization."""
+
+    Student.SPECIAL_SCHOOLS = frozenset({283})
+    student = Student(
+        **{
+            "کد مدرسه": "",
+            "کدملی": "0012345679",
+            "جنسیت": 0,
+            "وضعیت تحصیلی": 0,
+            "مرکز ثبت نام": 1,
+            "وضعیت ثبت نام": 1,
+            "گروه آزمایشی نهایی": 2,
+            "تلفن همراه داوطلب": "09123456789",
+        }
+    )
+    assert student.school_code is None
+    assert student.student_type == 0
+    data = student.to_dict()
+    assert "کد مدرسه" not in data
+    assert "مدرسه نهایی" not in data
+
+
 if __name__ == "__main__":  # pragma: no cover - manual execution
-    def _run_inline_tests() -> None:
-        """Execute module-level tests without relying on pytest."""
+    import pytest
 
-        test_special_school_student_type()
-        test_school_code_normalization_zero_values()
-        test_mobile_normalization_and_counter_validation()
-        test_mobile_normalization_accepts_double_zero_prefix()
-        test_national_id_checksum_validation()
-
-    try:
-        _run_inline_tests()
-    except AssertionError as error:  # pragma: no cover - defensive
-        raise SystemExit(1) from error
+    raise SystemExit(pytest.main([__file__]))
