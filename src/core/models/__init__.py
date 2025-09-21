@@ -2,7 +2,7 @@
 
 from .assignment import Assignment, AssignmentStatus
 from .manager import Manager
-from .mentor import Mentor
+from .mentor import AvailabilityStatus, Mentor, MentorType
 from .school import School
 from .student import Student
 
@@ -11,6 +11,8 @@ __all__ = [
     "AssignmentStatus",
     "Manager",
     "Mentor",
+    "MentorType",
+    "AvailabilityStatus",
     "School",
     "Student",
 ]

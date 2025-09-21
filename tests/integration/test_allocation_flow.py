@@ -1,4 +1,4 @@
-from src.core.models.mentor import Mentor
+from src.core.models.mentor import Mentor, MentorType
 from src.core.models.student import Student
 from src.core.services.allocation_service import AllocationService
 
@@ -29,8 +29,24 @@ def test_allocation_flow_prefers_preferences():
         ),
     ]
     mentors = [
-        Mentor(id="m1", first_name="Sara", last_name="Karimi", capacity=1),
-        Mentor(id="m2", first_name="Hamid", last_name="Ahmadi", capacity=2),
+        Mentor(
+            mentor_id=1001,
+            first_name="سارا",
+            last_name="کریمی",
+            gender=0,
+            mentor_type=MentorType.NORMAL,
+            allowed_groups=[205],
+            max_students=1,
+        ),
+        Mentor(
+            mentor_id=1002,
+            first_name="حمید",
+            last_name="احمدی",
+            gender=1,
+            mentor_type=MentorType.NORMAL,
+            allowed_groups=[105],
+            max_students=2,
+        ),
     ]
 
     service = AllocationService()
@@ -39,4 +55,4 @@ def test_allocation_flow_prefers_preferences():
     assert len(assignments) == 1
     assignment = assignments[0]
     assert assignment.student_id == "0013542419"
-    assert assignment.mentor_id in {"m1", "m2"}
+    assert assignment.mentor_id in {"1001", "1002"}
