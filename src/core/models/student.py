@@ -71,7 +71,7 @@ class Student(BaseModel):
     national_id: str = Field(
         ...,
         description="کد ملی ۱۰ رقمی",
-        validation_alias=AliasChoices("national_id", "کدملی"),
+        validation_alias=AliasChoices("national_id", "کدملی", "کد ملی"),
         serialization_alias="کدملی",
     )
     gender: int = Field(
@@ -89,13 +89,13 @@ class Student(BaseModel):
     reg_center: int = Field(
         ...,
         description="مرکز ثبت‌نام",
-        validation_alias=AliasChoices("reg_center", "مرکز ثبت نام"),
+        validation_alias=AliasChoices("reg_center", "مرکز ثبت نام", "مرکز ثبت‌نام"),
         serialization_alias="مرکز ثبت نام",
     )
     reg_status: int = Field(
         ...,
         description="وضعیت ثبت‌نام",
-        validation_alias=AliasChoices("reg_status", "وضعیت ثبت نام"),
+        validation_alias=AliasChoices("reg_status", "وضعیت ثبت نام", "وضعیت ثبت‌نام"),
         serialization_alias="وضعیت ثبت نام",
     )
     group_code: int = Field(
@@ -402,6 +402,7 @@ def test_mobile_normalization_and_counter_validation() -> None:
     )
     assert student.mobile == "09123456789"
     assert student.counter == "543571234"
+    assert student.is_assignable() is True
 
     invalid_counter = {
         "national_id": "0034567891",
@@ -422,13 +423,29 @@ def test_mobile_normalization_and_counter_validation() -> None:
         raise AssertionError("Expected ValueError for invalid counter")
 
 
+def test_mobile_normalization_accepts_double_zero_prefix() -> None:
+    """Ensure 0098-prefixed numbers normalize to the local format."""
+
+    Student.SPECIAL_SCHOOLS = frozenset()
+    student = Student(
+        national_id="0045678912",
+        gender=0,
+        edu_status=1,
+        reg_center=1,
+        reg_status=1,
+        group_code=6,
+        school_code=None,
+        mobile="00989121234567",
+    )
+    assert student.mobile == "09121234567"
+
+
 def test_national_id_checksum_validation() -> None:
     """Invalid national IDs should raise a Persian error message."""
 
     Student.SPECIAL_SCHOOLS = frozenset()
-    import pytest
 
-    with pytest.raises(ValueError) as exc_info:
+    try:
         Student(
             national_id="1111111111",
             gender=1,
@@ -439,10 +456,23 @@ def test_national_id_checksum_validation() -> None:
             school_code=None,
             mobile="09123456789",
         )
-    assert "کد ملی نامعتبر است" in str(exc_info.value)
+    except ValueError as error:
+        assert "کد ملی نامعتبر است" in str(error)
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Expected ValueError for invalid national ID")
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution
-    import pytest
+    def _run_inline_tests() -> None:
+        """Execute module-level tests without relying on pytest."""
 
-    raise SystemExit(pytest.main([__file__]))
+        test_special_school_student_type()
+        test_school_code_normalization_zero_values()
+        test_mobile_normalization_and_counter_validation()
+        test_mobile_normalization_accepts_double_zero_prefix()
+        test_national_id_checksum_validation()
+
+    try:
+        _run_inline_tests()
+    except AssertionError as error:  # pragma: no cover - defensive
+        raise SystemExit(1) from error
