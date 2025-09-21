@@ -10,6 +10,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ValidationError,
     computed_field,
     field_validator,
 )
@@ -118,6 +119,7 @@ class Student(BaseModel):
             "mobile_phone",
             "mobile_number",
             "تلفن همراه داوطلب",
+            "شماره موبایل",
         ),
         serialization_alias="تلفن همراه داوطلب",
     )
@@ -346,7 +348,7 @@ class Student(BaseModel):
     def to_dict(self) -> dict[str, Any]:
         """Return a plain dictionary excluding computed fields."""
 
-        return self.model_dump(exclude={"student_type"})
+        return self.model_dump(by_alias=True, exclude={"student_type"})
 
 
 def test_special_school_student_type() -> None:
@@ -417,10 +419,10 @@ def test_mobile_normalization_and_counter_validation() -> None:
     }
     try:
         Student(**invalid_counter)
-    except ValueError as error:
+    except ValidationError as error:
         assert "شمارنده" in str(error)
     else:  # pragma: no cover - defensive
-        raise AssertionError("Expected ValueError for invalid counter")
+        raise AssertionError("Expected ValidationError for invalid counter")
 
 
 def test_mobile_normalization_accepts_double_zero_prefix() -> None:
@@ -456,10 +458,10 @@ def test_national_id_checksum_validation() -> None:
             school_code=None,
             mobile="09123456789",
         )
-    except ValueError as error:
+    except ValidationError as error:
         assert "کد ملی نامعتبر است" in str(error)
     else:  # pragma: no cover - defensive
-        raise AssertionError("Expected ValueError for invalid national ID")
+        raise AssertionError("Expected ValidationError for invalid national ID")
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution

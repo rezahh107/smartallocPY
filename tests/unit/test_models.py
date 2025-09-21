@@ -1,3 +1,5 @@
+from pydantic import ValidationError
+
 from src.core.models.assignment import Assignment, AssignmentStatus
 from src.core.models.mentor import Mentor, MentorType
 from src.core.models.student import Student
@@ -50,7 +52,7 @@ def test_student_rejects_invalid_national_id():
     payload = _student_payload(national_id="1111111111")
     from pytest import raises
 
-    with raises(ValueError) as exc_info:
+    with raises(ValidationError) as exc_info:
         Student(**payload)
     assert "کد ملی نامعتبر است" in str(exc_info.value)
 
