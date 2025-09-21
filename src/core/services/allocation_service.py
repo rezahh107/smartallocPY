@@ -31,13 +31,15 @@ class AllocationService:
         """Allocate students to mentors respecting capacities."""
 
         active_students = [student for student in students if student.is_assignable()]
-        active_mentors = [mentor for mentor in mentors if mentor.active]
+        active_mentors = [mentor for mentor in mentors if mentor.is_active]
         if not active_mentors:
             raise AllocationError("No active mentors available for allocation")
 
-        mentor_lookup: Dict[str, Mentor] = {mentor.mentor_id: mentor for mentor in active_mentors}
+        mentor_lookup: Dict[str, Mentor] = {
+            str(mentor.mentor_id): mentor for mentor in active_mentors
+        }
         remaining_capacity = {
-            mentor_id: mentor.capacity if mentor.capacity > 0 else self.default_capacity
+            mentor_id: mentor.capacity_remaining
             for mentor_id, mentor in mentor_lookup.items()
         }
         allocations: List[Assignment] = []
@@ -47,6 +49,7 @@ class AllocationService:
             if mentor_id is None:
                 continue
             remaining_capacity[mentor_id] -= 1
+            mentor_lookup[mentor_id].current_load += 1
             allocations.append(
                 Assignment(
                     assignment_id=self.counter.next(),
@@ -68,11 +71,13 @@ class AllocationService:
         available = [
             (capacity, mentor_id)
             for mentor_id, capacity in remaining_capacity.items()
-            if capacity > 0 and mentors[mentor_id].active
+            if capacity > 0
+            and mentors[mentor_id].is_active
+            and mentors[mentor_id].can_accept_student(student)
         ]
         if not available:
             return None
 
-        available.sort(key=lambda item: (-item[0], mentors[item[1]].full_name))
+        available.sort(key=lambda item: (-item[0], mentors[item[1]].display_name))
         _, mentor_id = available[0]
         return mentor_id

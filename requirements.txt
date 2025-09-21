@@ -1,6 +1,6 @@
 pandas
 openpyxl
-pydantic
+pydantic>=2
 pydantic-settings
 fastapi
 sqlalchemy

@@ -14,13 +14,14 @@ requires-python = ">=3.10"
 dependencies = [
   "pandas",
   "openpyxl",
-  "pydantic",
+  "pydantic>=2",
   "pydantic-settings",
   "fastapi",
   "sqlalchemy",
   "uvicorn",
   "python-dotenv",
-  "email-validator"
+  "email-validator",
+  "persiantools"
 ]
 
 [project.optional-dependencies]
