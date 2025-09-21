@@ -7,13 +7,12 @@ from src.core.services.counter_service import CounterService
 def _student_payload(**overrides):
     payload = {
         "national_id": "0013542419",
-        "first_name": "علی",
-        "last_name": "رضایی",
         "gender": 1,
         "edu_status": 1,
         "reg_center": 1,
         "reg_status": 0,
         "group_code": 105,
+        "school_code": 12345,
         "mobile": "09121234567",
     }
     payload.update(overrides)
@@ -21,19 +20,18 @@ def _student_payload(**overrides):
 
 
 def test_allocation_service_assigns_students():
+    Student.SPECIAL_SCHOOLS = frozenset({12345})
     students = [
-        Student(**_student_payload(school_code=12345)),
+        Student(**_student_payload()),
         Student(
             **_student_payload(
                 national_id="0024587966",
-                first_name="ندا",
-                last_name="مرادی",
                 gender=0,
                 reg_center=2,
                 reg_status=1,
-                mobile="00989121234567",
                 group_code=205,
                 school_code=None,
+                mobile="00989151234567",
             )
         ),
     ]
