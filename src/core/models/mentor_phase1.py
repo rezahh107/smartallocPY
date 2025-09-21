@@ -149,7 +149,7 @@ class Mentor(BaseModel):
 
     mentor_id: int = Field(
         ...,
-        validation_alias=AliasChoices("mentor_id", "کد پشتیبان"),
+        validation_alias=AliasChoices("mentor_id", "کد پشتیبان", "کدِ پشتیبان"),
         serialization_alias="کد پشتیبان",
         description="شناسه یکتا برای پشتیبان",
     )
@@ -161,7 +161,7 @@ class Mentor(BaseModel):
     )
     type: str = Field(
         ...,
-        validation_alias=AliasChoices("type", "نوع پشتیبان"),
+        validation_alias=AliasChoices("type", "نوع پشتیبان", "نوعِ پشتیبان"),
         serialization_alias="نوع پشتیبان",
         description="نوع پشتیبان (ordinary یا school)",
     )
@@ -173,13 +173,13 @@ class Mentor(BaseModel):
     )
     current_load: int = Field(
         default=0,
-        validation_alias=AliasChoices("current_load", "بار جاری"),
+        validation_alias=AliasChoices("current_load", "بار جاری", "بارِ جاری"),
         serialization_alias="بار جاری",
         description="تعداد تخصیص های فعلی",
     )
     alias_code: Optional[str] = Field(
         default=None,
-        validation_alias=AliasChoices("alias_code", "کد مستعار"),
+        validation_alias=AliasChoices("alias_code", "کد مستعار", "کدِ مستعار"),
         serialization_alias="کد مستعار",
         description="کد مستعار اختیاری",
     )
@@ -191,7 +191,11 @@ class Mentor(BaseModel):
     )
     allowed_groups: FrozenSet[int] = Field(
         default_factory=frozenset,
-        validation_alias=AliasChoices("allowed_groups", "گروه‌های مجاز"),
+        validation_alias=AliasChoices(
+            "allowed_groups",
+            "گروه‌های مجاز",
+            "گروه های مجاز",
+        ),
         serialization_alias="گروه‌های مجاز",
         description="مجموعه کد گروه های مجاز",
     )
@@ -203,7 +207,12 @@ class Mentor(BaseModel):
     )
     schools: FrozenSet[int] = Field(
         default_factory=frozenset,
-        validation_alias=AliasChoices("schools", "مدارس مجاز", "کد مدرسه"),
+        validation_alias=AliasChoices(
+            "schools",
+            "مدارس مجاز",
+            "کد مدرسه",
+            "کدِ مدرسه",
+        ),
         serialization_alias="مدارس مجاز",
         description="مدارس تحت پوشش",
     )
@@ -435,6 +444,78 @@ def test_school_type_with_valid_schools() -> None:
     )
     assert mentor.schools == frozenset({283, 650})
     assert mentor.remaining_capacity == 60
+
+
+def test_alias_variants_with_ezafe_and_spacing() -> None:
+    data = {
+        "کدِ پشتیبان": "101",
+        "جنسیت": "1",
+        "نوعِ پشتیبان": "school",
+        "ظرفیت": "60",
+        "بارِ جاری": "5",
+        "مدارس مجاز": [283, "650", "650"],
+        "گروه های مجاز": ["3", "5"],
+        "فعال": True,
+    }
+    mentor = Mentor(**data)
+    assert mentor.mentor_id == 101
+    assert mentor.allowed_groups == frozenset({3, 5})
+    assert mentor.schools == frozenset({283, 650})
+    assert mentor.remaining_capacity == 55
+    assert mentor.occupancy == pytest.approx(5 / 60, rel=1e-3)
+
+
+def test_school_type_accepts_school_code_alias() -> None:
+    mentor = Mentor(
+        mentor_id=404,
+        gender=1,
+        type="school",
+        current_load=0,
+        is_active=True,
+        **{"کد مدرسه": 283},
+    )
+    assert mentor.schools == frozenset({283})
+
+
+def test_allowed_groups_zwnj_and_ezafe_variants() -> None:
+    mentor = Mentor(
+        mentor_id=202,
+        gender=0,
+        type="ordinary",
+        current_load=0,
+        is_active=True,
+        **{"گروه‌های مجاز": ["001", "1", 1]},
+    )
+    assert mentor.allowed_groups == frozenset({1})
+
+
+def test_to_dict_preserves_canonical_aliases() -> None:
+    mentor = Mentor(
+        **{
+            "کدِ پشتیبان": "42",
+            "جنسیت": 1,
+            "نوعِ پشتیبان": "ordinary",
+            "ظرفیت": 60,
+            "بارِ جاری": 0,
+            "گروه های مجاز": ["3", "5"],
+            "مراکز مجاز": [10, "10"],
+            "فعال": True,
+        }
+    )
+    serialized = mentor.to_dict()
+    assert set(serialized).issuperset({
+        "کد پشتیبان",
+        "جنسیت",
+        "نوع پشتیبان",
+        "ظرفیت",
+        "بار جاری",
+        "گروه‌های مجاز",
+        "مراکز مجاز",
+        "فعال",
+    })
+    assert "کد مستعار" not in serialized
+    assert serialized["گروه‌های مجاز"] == frozenset({3, 5})
+    assert serialized["مراکز مجاز"] == frozenset({10})
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution helper
