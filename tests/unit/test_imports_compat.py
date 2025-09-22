@@ -1,3 +1,2 @@
-def test_legacy_import_shim():
-    # Should import without raising
-    from src.core.models.mentor_phase1 import Mentor  # noqa: F401
+def test_import_canonical_mentor() -> None:
+    from src.core.models.mentor import Mentor  # noqa: F401

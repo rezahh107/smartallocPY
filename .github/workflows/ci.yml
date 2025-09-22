@@ -13,5 +13,7 @@ jobs:
       - run: |
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+      - name: Guard against legacy mentor_phase1 imports
+        run: '! git grep -n "mentor_phase1" -- ":!**/CHANGELOG.md" ":!.github/workflows/ci.yml"'
       - run: pytest
       - run: bandit -q -r src/core/models -x tests
