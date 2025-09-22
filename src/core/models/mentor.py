@@ -75,11 +75,15 @@ _ARABIC_TO_PERSIAN_CHARACTERS = str.maketrans(
     }
 )
 
-_MANAGER_ID_ALIASES = (
-    "manager_id",
-    "شناسه مدیر",
-    "شناسهٔ مدیر",
-    "شناسه‌ٔ مدیر",  # includes zero-width non-joiner variant
+_MANAGER_ID_ALIASES = tuple(
+    dict.fromkeys(
+        [
+            "manager_id",
+            "شناسه مدیر",
+            "شناسهٔ مدیر",
+            "شناسه‌ٔ مدیر",  # includes zero-width non-joiner variant
+        ]
+    )
 )
 
 

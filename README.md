@@ -1,5 +1,7 @@
 # Student Allocation System
 
+![CI](https://github.com/smartallocPY/smartallocPY/actions/workflows/ci.yml/badge.svg?branch=main)
+
 A modular Python project for managing student-to-mentor allocations. The project is structured around clear layers for models, services, utilities, API endpoints, and configuration files.
 
 ## Project Structure
@@ -65,6 +67,21 @@ mentor_dict = mentor.to_dict()
 - `tests/unit` contains isolated unit tests.
 - `tests/integration` contains flow-based integration tests.
 - Sample data and configuration files are stored in `data/`.
+- Track spec mismatches via `docs/TODOs_phase2.md`; refresh the list with `git grep -n "TODO(spec-mismatch)"`.
+
+### Testing & Coverage
+- Run tests: `pytest -q`
+- Enforced coverage: ≥90% on `src/core/models/mentor.py`
+- CI uploads `reports/coverage.xml` and `reports/junit.xml` as artifacts.
+
+### Local CI Parity
+- Gate mentor coverage (≥90%): `make test-gate`
+- Full-package reports (artifacts): `make test-artifacts`
+- Security scan: `make security`
+- Legacy import guard: `make guard`
+- Run all (CI-like): `make ci-local`
+
+Artifacts are written to `reports/coverage.xml` and `reports/junit.xml`.
 
 ## License
 

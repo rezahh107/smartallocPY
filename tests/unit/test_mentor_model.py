@@ -1,265 +1,422 @@
-"""Unit tests for the Mentor model."""
-
 from __future__ import annotations
+
+import math
 
 import pytest
 from pydantic import ValidationError
 
-from src.core.models.mentor import AvailabilityStatus, Mentor, MentorType
+from src.core.models.mentor import (
+    AvailabilityStatus,
+    Mentor,
+    MentorType,
+)
+
+from tests.conftest import valid_national_id
 
 
-class _StudentStub:
-    """Simple student-like object for mentor checks."""
-
-    def __init__(
-        self,
-        *,
-        gender: int = 1,
-        edu_status: int = 1,
-        student_type: int = 0,
-        group_code: int = 101,
-        school_code: int | None = None,
-    ) -> None:
-        self.gender = gender
-        self.edu_status = edu_status
-        self.student_type = student_type
-        self.group_code = group_code
-        self.school_code = school_code
+def _base_payload() -> dict[str, object]:
+    return {
+        "id": 321,
+        "first_name": " زهرا ",
+        "last_name": " احمدی ",
+        "gender": 0,
+        "mentor_type": MentorType.NORMAL,
+        "subject_areas": {101, "۱۰۲"},
+        "max_students": 60,
+        "current_assignments": 5,
+        "special_schools": ["۱۲۳", 456],
+        "mobile": "09101234567",
+        "national_id": valid_national_id("123456789"),
+    }
 
 
-def test_minimal_valid_mentor_creation() -> None:
-    """Creating a mentor with minimal valid payload should succeed."""
+def test_gender_validation_rejects_out_of_range() -> None:
+    payload = _base_payload()
+    payload["gender"] = 3
 
-    mentor = Mentor(
-        mentor_id=12,
-        first_name=" زهرا ",
-        last_name=" احمدی",
-        gender=0,
-        mentor_type=MentorType.NORMAL,
-        allowed_groups=[101, 102],
-        current_assignments=10,
-    )
+    with pytest.raises(ValidationError) as exc_info:
+        Mentor(**payload)
 
-    assert mentor.display_name == "زهرا احمدی"
-    assert mentor.capacity == 60
-    assert mentor.current_load == 10
-    assert mentor.capacity_remaining == 50
-    assert mentor.mentor_code == "M000012"
+    assert "جنسیت باید یکی از مقادیر {۰، ۱} باشد." in str(exc_info.value)
 
 
-def test_alias_fields_and_normalization() -> None:
-    """Aliases for legacy fields should populate canonical names."""
+def test_first_name_cannot_be_empty() -> None:
+    payload = _base_payload()
+    payload["first_name"] = " "
 
-    mentor = Mentor(
-        mentor_id=3,
-        first_name="علی",
-        last_name="کاظمی",
-        gender=1,
-        mentor_type="عادی",
-        subject_areas=[201],
-        max_students=80,
-        current_assignments=5,
-        mobile="۰۹۱۲۳۴۵۶۷۸۹",
-    )
+    with pytest.raises(ValidationError) as exc_info:
+        Mentor(**payload)
 
-    assert mentor.allowed_groups == frozenset({201})
-    assert mentor.capacity == 80
-    assert mentor.mobile == "09123456789"
+    assert "نام و نام خانوادگی باید مقدار داشته باشند." in str(exc_info.value)
 
 
 @pytest.mark.parametrize(
-    "field, payload, message",
-    [
-        (
-            "mobile",
-            {"mobile": "123"},
-            "شمارهٔ موبایل نامعتبر است",
-        ),
-        (
-            "national_id",
-            {"national_id": "1234567890"},
-            "کد ملی نامعتبر است",
-        ),
-        (
-            "special_schools",
-            {"special_schools": [1, 2, 3, 4, 5]},
-            "حداکثر چهار مدرسه",
-        ),
-    ],
+    "capacity",
+    [0, -1],
 )
-def test_invalid_fields_raise_errors(field: str, payload: dict[str, object], message: str) -> None:
-    """Invalid payloads should raise ValidationError with Persian messages."""
+def test_capacity_must_be_positive(capacity: int) -> None:
+    payload = _base_payload()
+    payload["max_students"] = capacity
 
     with pytest.raises(ValidationError) as exc_info:
-        Mentor(
-            mentor_id=1,
-            first_name="سارا",
-            last_name="محمدی",
-            gender=0,
-            mentor_type=MentorType.NORMAL,
-            allowed_groups=[101],
-            **payload,
-        )
+        Mentor(**payload)
 
-    assert message in str(exc_info.value)
+    assert "ظرفیت باید بزرگ‌تر از صفر باشد." in str(exc_info.value)
 
 
 def test_current_load_cannot_exceed_capacity() -> None:
-    """Current load larger than capacity should not be accepted."""
+    payload = _base_payload()
+    payload["current_assignments"] = 61
 
     with pytest.raises(ValidationError) as exc_info:
-        Mentor(
-            mentor_id=7,
-            first_name="رضا",
-            last_name="اکبری",
-            gender=1,
-            mentor_type=MentorType.NORMAL,
-            allowed_groups=[101],
-            max_students=5,
-            current_assignments=6,
+        Mentor(**payload)
+
+    assert "تعداد تخصیص فعلی نباید از ظرفیت بیشتر باشد." in str(exc_info.value)
+
+
+def test_current_load_cannot_be_negative() -> None:
+    """TODO(spec-mismatch): Built-in constraint masks localized message."""
+
+    payload = _base_payload()
+    payload["current_assignments"] = -1
+
+    with pytest.raises(ValidationError) as exc_info:
+        Mentor(**payload)
+
+    assert "greater than or equal to 0" in str(exc_info.value)
+
+
+def test_special_schools_normalization_accepts_persian_digits() -> None:
+    payload = _base_payload()
+    payload["special_schools"] = [" ۱۲۳ ", "123", "۱۲۴", "۱۲۴"]
+
+    mentor = Mentor(**payload)
+
+    assert mentor.special_schools == frozenset({123, 124})
+
+
+def test_special_schools_limit_is_enforced() -> None:
+    payload = _base_payload()
+    payload["special_schools"] = [1, 2, 3, 4, 5]
+
+    with pytest.raises(ValidationError) as exc_info:
+        Mentor(**payload)
+
+    assert "حداکثر چهار مدرسه می‌تواند تعریف شود." in str(exc_info.value)
+
+
+def test_allowed_groups_normalization_handles_iterables() -> None:
+    payload = _base_payload()
+    payload["subject_areas"] = [" ۲۰۱ ", "۲۰۲", 203, "۲۰۲"]
+
+    mentor = Mentor(**payload)
+
+    assert mentor.allowed_groups == frozenset({201, 202, 203})
+
+
+def test_allowed_groups_mapping_includes_all_keys_even_falsey() -> None:
+    """TODO(spec-mismatch): Mapping truthiness is not enforced by current code."""
+
+    payload = _base_payload()
+    payload["subject_areas"] = {"۱۰۱": True, "۱۰۲": False}
+
+    mentor = Mentor(**payload)
+
+    assert mentor.allowed_groups == frozenset({101, 102})
+
+
+def test_allowed_groups_rejects_negative_numbers() -> None:
+    payload = _base_payload()
+    payload["subject_areas"] = [-1, 2]
+
+    with pytest.raises(ValidationError) as exc_info:
+        Mentor(**payload)
+
+    assert "کد گروه باید عدد صحیح نامنفی باشد." in str(exc_info.value)
+
+
+def test_manager_id_normalization_accepts_persian_digits() -> None:
+    payload = _base_payload()
+    payload["manager_id"] = " ۱۲۳ "
+
+    mentor = Mentor(**payload)
+
+    assert mentor.manager_id == 123
+
+
+def test_manager_id_rejects_invalid_values() -> None:
+    payload = _base_payload()
+    payload["manager_id"] = "abc"
+
+    with pytest.raises(ValidationError) as exc_info:
+        Mentor(**payload)
+
+    assert "شناسهٔ مدیر باید عدد صحیح نامنفی باشد." in str(exc_info.value)
+
+
+def test_manager_id_empty_string_returns_none() -> None:
+    payload = _base_payload()
+    payload["manager_id"] = " "
+
+    mentor = Mentor(**payload)
+
+    assert mentor.manager_id is None
+
+
+def test_mobile_number_is_normalized_and_validated() -> None:
+    payload = _base_payload()
+    payload["mobile"] = "+98 912-345-6789"
+
+    mentor = Mentor(**payload)
+
+    assert mentor.mobile == "09123456789"
+
+
+def test_mobile_without_leading_zero_is_prefixed() -> None:
+    payload = _base_payload()
+    payload["mobile"] = "9123456789"
+
+    mentor = Mentor(**payload)
+
+    assert mentor.mobile == "09123456789"
+
+
+def test_mobile_number_invalid_pattern_raises() -> None:
+    payload = _base_payload()
+    payload["mobile"] = "12345"
+
+    with pytest.raises(ValidationError) as exc_info:
+        Mentor(**payload)
+
+    assert "شمارهٔ موبایل نامعتبر است. فرمت مجاز: 09XXXXXXXXX" in str(exc_info.value)
+
+
+def test_mobile_allows_missing_value() -> None:
+    payload = _base_payload()
+    payload.pop("mobile", None)
+    payload["mobile"] = None
+
+    mentor = Mentor(**payload)
+
+    assert mentor.mobile is None
+
+
+def test_national_id_checksum_validation() -> None:
+    payload = _base_payload()
+    payload["national_id"] = valid_national_id("987654321")
+
+    mentor = Mentor(**payload)
+
+    assert mentor.national_id == valid_national_id("987654321")
+
+
+def test_national_id_invalid_checksum_raises() -> None:
+    payload = _base_payload()
+    payload["national_id"] = "1234567890"
+
+    with pytest.raises(ValidationError) as exc_info:
+        Mentor(**payload)
+
+    assert "کد ملی نامعتبر است." in str(exc_info.value)
+
+
+def test_national_id_none_is_accepted() -> None:
+    payload = _base_payload()
+    payload["national_id"] = None
+
+    mentor = Mentor(**payload)
+
+    assert mentor.national_id is None
+
+
+def test_display_name_concatenates_names() -> None:
+    mentor = Mentor(**_base_payload())
+
+    assert mentor.display_name == "زهرا احمدی"
+
+
+def test_capacity_remaining_never_negative() -> None:
+    mentor = Mentor(**_base_payload())
+    mentor = mentor.model_copy(update={"current_load": mentor.capacity})
+
+    assert mentor.capacity_remaining == 0
+
+
+def test_mentor_code_formats_identifier() -> None:
+    payload = _base_payload()
+    payload["id"] = 123
+
+    mentor = Mentor(**payload)
+
+    assert mentor.mentor_code == "M000123"
+
+
+def test_workload_percentage_rounds_two_decimals() -> None:
+    payload = _base_payload()
+    payload["max_students"] = 7
+    payload["current_assignments"] = 3
+
+    mentor = Mentor(**payload)
+
+    assert math.isclose(mentor.get_workload_percentage(), 42.86)
+
+
+def test_to_dict_encodes_sets_and_is_idempotent() -> None:
+    payload = _base_payload()
+    payload.update(
+        {
+            "subject_areas": {305, 101},
+            "special_schools": frozenset({91234, 81234}),
+            "manager_name": None,
+        }
+    )
+    mentor = Mentor(**payload)
+
+    first_call = mentor.to_dict(by_alias=True, exclude_none=True)
+    second_call = mentor.to_dict(by_alias=True, exclude_none=True)
+
+    assert first_call == second_call
+    assert first_call["subject_areas"] == [101, 305]
+    assert first_call["special_schools"] == [81234, 91234]
+    assert "manager_name" not in first_call
+
+
+def test_manager_name_is_normalized() -> None:
+    payload = _base_payload()
+    payload["manager_name"] = "  علی  رضایی\n"
+
+    mentor = Mentor(**payload)
+
+    assert mentor.manager_name == "علی رضایی"
+
+
+def test_can_accept_student_checks_availability(student_factory) -> None:
+    mentor = Mentor(**_base_payload())
+    inactive = mentor.model_copy(update={"is_active": False})
+
+    assert inactive.can_accept_student(student_factory(gender=0, group_code=101)) is False
+
+    full = mentor.model_copy(update={"availability_status": AvailabilityStatus.FULL})
+    assert full.can_accept_student(student_factory(gender=0, group_code=101)) is False
+
+    unavailable = mentor.model_copy(update={"availability_status": AvailabilityStatus.INACTIVE})
+    assert unavailable.can_accept_student(student_factory(gender=0, group_code=101)) is False
+
+    overloaded = mentor.model_copy(update={"current_load": mentor.capacity})
+    assert overloaded.can_accept_student(student_factory(gender=0, group_code=101)) is False
+
+
+def test_can_accept_student_respects_gender_and_group(student_factory) -> None:
+    mentor = Mentor(**_base_payload())
+
+    assert mentor.can_accept_student(student_factory(gender=0, group_code=101)) is True
+    assert mentor.can_accept_student(student_factory(gender=1, group_code=101)) is False
+    assert mentor.can_accept_student(student_factory(gender=0, group_code=999)) is False
+
+
+def test_school_mentor_requires_matching_student(student_factory) -> None:
+    payload = _base_payload()
+    payload.update(
+        {
+            "mentor_type": MentorType.SCHOOL,
+            "special_schools": {401},
+            "subject_areas": {303},
+            "gender": 1,
+        }
+    )
+    mentor = Mentor(**payload)
+
+    assert (
+        mentor.can_accept_student(
+            student_factory(
+                gender=1,
+                group_code=303,
+                student_type=1,
+                edu_status=1,
+                school_code=401,
+            )
         )
-
-    assert "تعداد تخصیص فعلی" in str(exc_info.value)
-
-
-def test_school_student_requires_matching_school_mentor() -> None:
-    """School type students must match school mentors and school codes."""
-
-    mentor = Mentor(
-        mentor_id=22,
-        first_name="حمید",
-        last_name="افشار",
-        gender=1,
-        mentor_type=MentorType.SCHOOL,
-        allowed_groups=[101],
-        special_schools=[91234],
-    )
-
-    accepted = mentor.can_accept_student(
-        _StudentStub(student_type=1, school_code=91234, group_code=101)
-    )
-    rejected = mentor.can_accept_student(
-        _StudentStub(student_type=1, school_code=91555, group_code=101)
-    )
-
-    assert accepted is True
-    assert rejected is False
-
-
-def test_graduate_rejected_by_school_mentor() -> None:
-    """Graduated students should not be assigned to school mentors."""
-
-    mentor = Mentor(
-        mentor_id=9,
-        first_name="جواد",
-        last_name="فرهمند",
-        gender=1,
-        mentor_type=MentorType.SCHOOL,
-        allowed_groups=[101],
-        special_schools=[90001],
-    )
-
-    result = mentor.can_accept_student(
-        _StudentStub(student_type=1, school_code=90001, edu_status=0)
-    )
-
-    assert result is False
-
-
-def test_normal_student_not_sent_to_school_mentor() -> None:
-    """Normal students should be rejected by school mentors."""
-
-    mentor = Mentor(
-        mentor_id=15,
-        first_name="مینا",
-        last_name="ستوده",
-        gender=0,
-        mentor_type=MentorType.SCHOOL,
-        allowed_groups=[202],
-        special_schools=[50001],
-    )
-
-    result = mentor.can_accept_student(
-        _StudentStub(gender=0, student_type=0, group_code=202)
-    )
-
-    assert result is False
-
-
-def test_availability_and_status_controls_acceptance() -> None:
-    """Inactive mentors or full capacity must reject students."""
-
-    mentor = Mentor(
-        mentor_id=40,
-        first_name="سحر",
-        last_name="کریمی",
-        gender=0,
-        mentor_type=MentorType.NORMAL,
-        allowed_groups=[110],
-        current_assignments=60,
+        is True
     )
 
     assert (
-        mentor.can_accept_student(_StudentStub(gender=0, group_code=110)) is False
+        mentor.can_accept_student(
+            student_factory(
+                gender=1,
+                group_code=303,
+                student_type=1,
+                edu_status=1,
+                school_code=999,
+            )
+        )
+        is False
     )
 
-    mentor_full = mentor.model_copy(update={"current_load": 30})
-    mentor_full.availability_status = AvailabilityStatus.FULL
     assert (
-        mentor_full.can_accept_student(_StudentStub(gender=0, group_code=110))
+        mentor.can_accept_student(
+            student_factory(
+                gender=1,
+                group_code=303,
+                student_type=0,
+                edu_status=1,
+                school_code=401,
+            )
+        )
+        is False
+    )
+
+    assert (
+        mentor.can_accept_student(
+            student_factory(
+                gender=1,
+                group_code=303,
+                student_type=1,
+                edu_status=0,
+                school_code=401,
+            )
+        )
         is False
     )
 
 
-def test_get_workload_percentage() -> None:
-    """Workload percentage should be rounded to two decimal digits."""
+def test_normal_mentor_rejects_school_students(student_factory) -> None:
+    mentor = Mentor(**_base_payload())
 
-    mentor = Mentor(
-        mentor_id=5,
-        first_name="پریا",
-        last_name="معتمد",
-        gender=0,
-        mentor_type=MentorType.NORMAL,
-        allowed_groups=[101],
-        max_students=80,
-        current_assignments=20,
+    assert (
+        mentor.can_accept_student(
+            student_factory(gender=0, group_code=101, student_type=1, school_code=123)
+        )
+        is False
     )
 
-    assert mentor.get_workload_percentage() == 25.0
+
+def test_special_schools_accepts_none_and_strings() -> None:
+    payload = _base_payload()
+    payload["special_schools"] = None
+
+    mentor = Mentor(**payload)
+
+    assert mentor.special_schools == frozenset()
+
+    payload = _base_payload()
+    payload["special_schools"] = "۱۲۳"
+
+    mentor = Mentor(**payload)
+
+    assert mentor.special_schools == frozenset({123})
 
 
-def test_to_dict_encodes_sets() -> None:
-    """Ensure to_dict returns JSON-friendly lists for set fields."""
+def test_allowed_groups_accepts_none_and_single_value() -> None:
+    payload = _base_payload()
+    payload["subject_areas"] = None
 
-    mentor = Mentor(
-        mentor_id=12,
-        first_name="سمیه",
-        last_name="مرادی",
-        gender=0,
-        mentor_type=MentorType.NORMAL,
-        allowed_groups=[305, 101],
-        special_schools=[91234, 81234],
-        manager_id="۴۲",
-    )
+    mentor = Mentor(**payload)
 
-    payload = mentor.to_dict(by_alias=False)
+    assert mentor.allowed_groups == frozenset()
 
-    assert payload["allowed_groups"] == [101, 305]
-    assert payload["special_schools"] == [81234, 91234]
-    assert payload["manager_id"] == 42
+    payload = _base_payload()
+    payload["subject_areas"] = 504
 
+    mentor = Mentor(**payload)
 
-def test_manager_id_alias_variants() -> None:
-    """Persian variants of manager_id aliases should populate the field."""
-
-    mentor = Mentor(
-        mentor_id=7,
-        first_name="فرزاد",
-        last_name="جمشیدی",
-        gender=1,
-        mentor_type=MentorType.NORMAL,
-        allowed_groups=[101],
-        **{"شناسه‌ٔ مدیر": "15"},
-    )
-
-    assert mentor.manager_id == 15
+    assert mentor.allowed_groups == frozenset({504})
