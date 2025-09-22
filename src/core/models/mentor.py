@@ -75,6 +75,13 @@ _ARABIC_TO_PERSIAN_CHARACTERS = str.maketrans(
     }
 )
 
+_MANAGER_ID_ALIASES = (
+    "manager_id",
+    "شناسه مدیر",
+    "شناسهٔ مدیر",
+    "شناسه‌ٔ مدیر",  # includes zero-width non-joiner variant
+)
+
 
 class MentorType(str, Enum):
     """Permissible mentor categories."""
@@ -171,12 +178,7 @@ class Mentor(BaseModel):
     )
     manager_id: Optional[int] = Field(
         default=None,
-        validation_alias=AliasChoices(
-            "manager_id",
-            "شناسه مدیر",
-            "شناسهٔ مدیر",
-            "شناسه‌ٔ مدیر",
-        ),
+        validation_alias=AliasChoices(*_MANAGER_ID_ALIASES),
         description="شناسهٔ مدیر مرتبط در سامانه",
     )
     manager_name: Optional[str] = Field(None, description="مدیر مستقیم")
