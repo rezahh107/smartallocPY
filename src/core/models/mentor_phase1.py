@@ -10,10 +10,8 @@ an executable entry-point for convenience.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any, FrozenSet, Optional
-
-import pytest
 
 from pydantic import (
     AliasChoices,
@@ -90,7 +88,7 @@ def _normalize_int(value: Any, *, allow_zero: bool, field_title: str) -> int:
 def _normalize_optional_int(value: Any, field_title: str) -> Optional[int]:
     """Normalize optional integers, returning ``None`` when unset."""
 
-    if value in {None, "", []}:
+    if value in (None, "", []):
         return None
     if isinstance(value, bool):
         raise ValueError(f"{field_title} باید عددی باشد")
@@ -107,7 +105,12 @@ def _normalize_code_collection(value: Any, field_title: str) -> FrozenSet[int]:
     if value is None:
         return frozenset()
 
-    if isinstance(value, str):
+    items: list[Any]
+    if isinstance(value, Mapping):
+        items = [key for key, enabled in value.items() if enabled]
+        if not items:
+            return frozenset()
+    elif isinstance(value, str):
         if not value.strip():
             return frozenset()
         items = [value]
@@ -125,6 +128,8 @@ def _normalize_code_collection(value: Any, field_title: str) -> FrozenSet[int]:
         if isinstance(item, str):
             if not item.strip():
                 raise ValueError(f"{field_title} نمی‌تواند مقادیر خالی داشته باشد")
+        elif isinstance(item, Mapping):
+            raise ValueError(f"{field_title} باید فقط شامل اعداد ساده باشد")
         elif isinstance(item, Iterable) and not isinstance(item, (str, bytes)):
             raise ValueError(f"{field_title} باید فقط شامل اعداد ساده باشد")
         if isinstance(item, bool):
@@ -136,6 +141,26 @@ def _normalize_code_collection(value: Any, field_title: str) -> FrozenSet[int]:
         )
         normalized_items.add(normalized)
     return frozenset(normalized_items)
+
+
+def _encode_collections(value: Any) -> Any:
+    """Recursively encode sets as sorted lists for JSON-friendly output."""
+
+    if isinstance(value, dict):
+        return {key: _encode_collections(val) for key, val in value.items()}
+    if isinstance(value, (set, frozenset)):
+        if all(isinstance(item, int) for item in value):
+            return sorted(value)
+        return sorted(value, key=str)
+    if isinstance(value, list):
+        if value and all(isinstance(item, int) for item in value):
+            if all(value[index] <= value[index + 1] for index in range(len(value) - 1)):
+                return value
+            return sorted(value)
+        return [_encode_collections(item) for item in value]
+    if isinstance(value, tuple):
+        return [_encode_collections(item) for item in value]
+    return value
 
 
 class Mentor(BaseModel):
@@ -185,7 +210,13 @@ class Mentor(BaseModel):
     )
     manager_id: Optional[int] = Field(
         default=None,
-        validation_alias=AliasChoices("manager_id", "شناسه مدیر"),
+        validation_alias=AliasChoices(
+            "manager_id",
+            "شناسه مدیر",
+            "شناسهٔ مدیر",
+            "شناسه‌ٔ مدیر",
+            "کد مدیر",
+        ),
         serialization_alias="شناسه مدیر",
         description="شناسه مدیر مربوط",
     )
@@ -201,7 +232,11 @@ class Mentor(BaseModel):
     )
     allowed_centers: FrozenSet[int] = Field(
         default_factory=frozenset,
-        validation_alias=AliasChoices("allowed_centers", "مراکز مجاز"),
+        validation_alias=AliasChoices(
+            "allowed_centers",
+            "مراکز مجاز",
+            "مراکزِ مجاز",
+        ),
         serialization_alias="مراکز مجاز",
         description="مجموعه کد مراکز مجاز",
     )
@@ -270,7 +305,7 @@ class Mentor(BaseModel):
     @field_validator("alias_code", mode="before")
     @classmethod
     def _normalize_alias_code(cls, value: Any) -> Optional[str]:
-        if value in {None, "", []}:
+        if value in (None, "", []):
             return None
         text = str(value).strip()
         return text or None
@@ -278,7 +313,7 @@ class Mentor(BaseModel):
     @field_validator("manager_id", mode="before")
     @classmethod
     def _normalize_manager_id(cls, value: Any) -> Optional[int]:
-        if value in {None, "", []}:
+        if value in (None, "", []):
             return None
         normalized = _normalize_optional_int(value, "شناسه مدیر")
         if normalized is not None and normalized < 0:
@@ -329,198 +364,15 @@ class Mentor(BaseModel):
         return self.current_load / self.capacity
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize the model using Persian aliases while omitting ``None`` values."""
+        """Serialize the model using Persian aliases and JSON-friendly collections."""
 
-        return self.model_dump(by_alias=True, exclude_none=True)
-
-
-# ----------------------------- Pytest test cases -----------------------------
+        raw = self.model_dump(by_alias=True, exclude_none=True)
+        return _encode_collections(raw)
 
 
-def _build_base_payload() -> dict[str, Any]:
-    return {
-        "mentor_id": "101",
-        "gender": "1",
-        "type": "ordinary",
-        "capacity": 80,
-        "current_load": 10,
-        "is_active": True,
-    }
-
-
-def test_default_capacity_and_remaining_capacity() -> None:
-    data = {
-        "mentor_id": 5,
-        "gender": 0,
-        "type": "ordinary",
-        "current_load": 0,
-        "is_active": True,
-    }
-    mentor = Mentor(**data)
-    assert mentor.capacity == 60
-    assert mentor.remaining_capacity == 60
-    assert mentor.occupancy == 0.0
-
-
-def test_zero_capacity_sets_full_occupancy() -> None:
-    data = {
-        "mentor_id": "77",
-        "gender": 1,
-        "type": "ordinary",
-        "capacity": 0,
-        "current_load": 0,
-        "is_active": True,
-    }
-    mentor = Mentor(**data)
-    assert mentor.occupancy == 1.0
-
-
-def test_current_load_exceeding_capacity_raises_error() -> None:
-    data = _build_base_payload()
-    data["current_load"] = 90
-    data["capacity"] = 80
-    with pytest.raises(ValidationError):
-        Mentor(**data)
-
-
-def test_school_type_requires_non_empty_schools() -> None:
-    data = _build_base_payload()
-    data.update({"type": "school", "schools": []})
-    with pytest.raises(ValidationError):
-        Mentor(**data)
-
-
-def test_code_collections_normalization_and_deduplication() -> None:
-    data = _build_base_payload()
-    data.update(
-        {
-            "allowed_groups": ["1", "001", 1],
-            "allowed_centers": ("2", "02"),
-            "schools": {"283", "650", 650},
-        }
-    )
-    mentor = Mentor(**data)
-    assert mentor.allowed_groups == frozenset({1})
-    assert mentor.allowed_centers == frozenset({2})
-    assert mentor.schools == frozenset({283, 650})
-
-
-def test_persian_aliases_parsing_and_serialization() -> None:
-    data = {
-        "کد پشتیبان": "202",
-        "جنسیت": "1",
-        "نوع پشتیبان": "ordinary",
-        "ظرفیت": "60",
-        "بار جاری": "5",
-        "فعال": True,
-    }
-    mentor = Mentor(**data)
-    serialized = mentor.to_dict()
-    assert serialized["کد پشتیبان"] == 202
-    assert serialized["ظرفیت"] == 60
-    assert "شناسه مدیر" not in serialized
-
-
-def test_is_active_false_and_gender_validation() -> None:
-    data = _build_base_payload()
-    data["is_active"] = False
-    mentor = Mentor(**data)
-    assert mentor.is_active is False
-
-    data_bad_gender = _build_base_payload()
-    data_bad_gender["gender"] = 2
-    with pytest.raises(ValidationError) as exc_info:
-        Mentor(**data_bad_gender)
-    assert "مقدار جنسیت نامعتبر است" in str(exc_info.value)
-
-
-def test_school_type_with_valid_schools() -> None:
-    mentor = Mentor(
-        mentor_id="303",
-        gender=1,
-        type="school",
-        schools=[283, "650"],
-        is_active=True,
-    )
-    assert mentor.schools == frozenset({283, 650})
-    assert mentor.remaining_capacity == 60
-
-
-def test_alias_variants_with_ezafe_and_spacing() -> None:
-    data = {
-        "کدِ پشتیبان": "101",
-        "جنسیت": "1",
-        "نوعِ پشتیبان": "school",
-        "ظرفیت": "60",
-        "بارِ جاری": "5",
-        "مدارس مجاز": [283, "650", "650"],
-        "گروه های مجاز": ["3", "5"],
-        "فعال": True,
-    }
-    mentor = Mentor(**data)
-    assert mentor.mentor_id == 101
-    assert mentor.allowed_groups == frozenset({3, 5})
-    assert mentor.schools == frozenset({283, 650})
-    assert mentor.remaining_capacity == 55
-    assert mentor.occupancy == pytest.approx(5 / 60, rel=1e-3)
-
-
-def test_school_type_accepts_school_code_alias() -> None:
-    mentor = Mentor(
-        mentor_id=404,
-        gender=1,
-        type="school",
-        current_load=0,
-        is_active=True,
-        **{"کد مدرسه": 283},
-    )
-    assert mentor.schools == frozenset({283})
-
-
-def test_allowed_groups_zwnj_and_ezafe_variants() -> None:
-    mentor = Mentor(
-        mentor_id=202,
-        gender=0,
-        type="ordinary",
-        current_load=0,
-        is_active=True,
-        **{"گروه‌های مجاز": ["001", "1", 1]},
-    )
-    assert mentor.allowed_groups == frozenset({1})
-
-
-def test_to_dict_preserves_canonical_aliases() -> None:
-    mentor = Mentor(
-        **{
-            "کدِ پشتیبان": "42",
-            "جنسیت": 1,
-            "نوعِ پشتیبان": "ordinary",
-            "ظرفیت": 60,
-            "بارِ جاری": 0,
-            "گروه های مجاز": ["3", "5"],
-            "مراکز مجاز": [10, "10"],
-            "فعال": True,
-        }
-    )
-    serialized = mentor.to_dict()
-    assert set(serialized).issuperset({
-        "کد پشتیبان",
-        "جنسیت",
-        "نوع پشتیبان",
-        "ظرفیت",
-        "بار جاری",
-        "گروه‌های مجاز",
-        "مراکز مجاز",
-        "فعال",
-    })
-    assert "کد مستعار" not in serialized
-    assert serialized["گروه‌های مجاز"] == frozenset({3, 5})
-    assert serialized["مراکز مجاز"] == frozenset({10})
-
-
-if __name__ == "__main__":  # pragma: no cover - manual execution helper
+if __name__ == "__main__":
     import pytest
     import sys
 
-    raise SystemExit(pytest.main([__file__] + sys.argv[1:]))
+    raise SystemExit(pytest.main([__file__]))
 

@@ -33,3 +33,6 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q --cov=src.core.models.mentor_phase1 --cov-report=term-missing --cov-fail-under=90"
