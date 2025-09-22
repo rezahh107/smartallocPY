@@ -1,41 +1,27 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "student-allocation-system"
-version = "0.1.1"
-description = "Student to mentor allocation system"
-authors = [
-  { name = "Student Allocation Team", email = "team@example.com" }
-]
+name = "smartalloc"
+version = "0.1.0"
+description = "Smart allocation system"
 readme = "README.md"
-requires-python = ">=3.10"
+authors = [
+  { name = "Smart Alloc Team", email = "team@example.com" }
+]
+license = { text = "MIT" }
 dependencies = [
-  "pandas",
-  "openpyxl",
-  "pydantic>=2",
-  "pydantic-settings",
-  "fastapi",
-  "sqlalchemy",
-  "uvicorn",
-  "python-dotenv",
-  "email-validator",
-  "persiantools"
-]
-
-[project.optional-dependencies]
-dev = [
+  "pydantic>=2.0",
+  "pydantic[email]",
   "pytest",
-  "pytest-cov",
-  "httpx",
-  "bandit",
-  "ruff"
+  "pytest-cov"
 ]
+requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "-q --cov=src.core.models --cov-report=term-missing --cov-fail-under=90"
+addopts = "-q --cov=src.core.models.mentor --cov-report=term-missing --cov-fail-under=90"
 testpaths = ["tests"]

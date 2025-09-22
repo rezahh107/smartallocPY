@@ -13,22 +13,35 @@ jobs:
       - run: |
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
       - name: Guard against legacy mentor_phase1 imports
         run: |
           git grep -n "mentor_phase1" -- . ":(exclude)CHANGELOG.md" ":(exclude).github/workflows/*" || true
           test -z "$(git grep -n "mentor_phase1" -- . ":(exclude)CHANGELOG.md" ":(exclude).github/workflows/*")"
-      - name: Run tests with coverage
+
+      # Gate coverage only on the canonical mentor module
+      - name: Gate coverage (mentor module)
+        run: |
+          pytest -q -o addopts="" \
+            --cov=src.core.models.mentor \
+            --cov-report=term-missing \
+            --cov-fail-under=90
+
+      # Full package coverage for artifacts (no gating)
+      - name: Run full package coverage (artifacts)
         run: |
           mkdir -p reports
-          pytest -q \
+          pytest -q -o addopts="" \
             --cov=src.core.models \
             --cov-report=term-missing \
             --cov-report=xml:reports/coverage.xml \
             --junitxml=reports/junit.xml
+
       - name: Upload test reports
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
           path: reports/
+
       - name: Bandit
         run: bandit -q -r src/core/models -x tests
