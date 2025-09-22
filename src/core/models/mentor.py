@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterable, Mapping
 from enum import Enum
 from typing import Any, FrozenSet, Optional, Protocol
 
-from persiantools import characters, digits
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -21,6 +21,51 @@ from pydantic import (
 
 _MOBILE_PATTERN = re.compile(r"^09\d{9}$")
 _NATIONAL_ID_PATTERN = re.compile(r"^\d{10}$")
+
+_DIGIT_TRANSLATION = str.maketrans(
+    {
+        "۰": "0",
+        "۱": "1",
+        "۲": "2",
+        "۳": "3",
+        "۴": "4",
+        "۵": "5",
+        "۶": "6",
+        "۷": "7",
+        "۸": "8",
+        "۹": "9",
+        "٠": "0",
+        "١": "1",
+        "٢": "2",
+        "٣": "3",
+        "٤": "4",
+        "٥": "5",
+        "٦": "6",
+        "٧": "7",
+        "٨": "8",
+        "٩": "9",
+    }
+)
+
+_ARABIC_TO_PERSIAN_CHARACTERS = str.maketrans(
+    {
+        "ي": "ی",
+        "ى": "ی",
+        "ﻱ": "ی",
+        "ﻲ": "ی",
+        "ﻳ": "ی",
+        "ك": "ک",
+        "ﻙ": "ک",
+        "ﻛ": "ک",
+        "ﻜ": "ک",
+        "ة": "ه",
+        "ۀ": "هٔ",
+        "ؤ": "و",
+        "إ": "ا",
+        "أ": "ا",
+        "ٱ": "ا",
+    }
+)
 
 
 class MentorType(str, Enum):
@@ -51,7 +96,8 @@ class StudentLike(Protocol):
 def _normalize_name(value: str) -> str:
     """Normalize Persian names by unifying script and spaces."""
 
-    normalized = characters.ar_to_fa(value or "")
+    text = unicodedata.normalize("NFKC", value or "")
+    normalized = text.translate(_ARABIC_TO_PERSIAN_CHARACTERS)
     normalized = " ".join(normalized.split())
     return normalized
 
@@ -61,7 +107,8 @@ def _normalize_mobile(value: Optional[str]) -> Optional[str]:
 
     if value is None:
         return None
-    digits_only = digits.fa_to_en(digits.ar_to_fa(str(value).strip()))
+    digits_only = unicodedata.normalize("NFKC", str(value).strip())
+    digits_only = digits_only.translate(_DIGIT_TRANSLATION)
     digits_only = re.sub(r"\D", "", digits_only)
     if digits_only.startswith("+98"):
         digits_only = "0" + digits_only[3:]
@@ -181,7 +228,8 @@ class Mentor(BaseModel):
         cleaned: list[int] = []
         for code in raw_items:
             try:
-                normalized = digits.fa_to_en(digits.ar_to_fa(str(code).strip()))
+                normalized = unicodedata.normalize("NFKC", str(code).strip())
+                normalized = normalized.translate(_DIGIT_TRANSLATION)
                 number = int(normalized)
             except (TypeError, ValueError):
                 raise ValueError("کد مدرسه باید عدد صحیح مثبت باشد.") from None
@@ -228,7 +276,8 @@ class Mentor(BaseModel):
         cleaned: list[int] = []
         for code in raw_items:
             try:
-                normalized = digits.fa_to_en(digits.ar_to_fa(str(code).strip()))
+                normalized = unicodedata.normalize("NFKC", str(code).strip())
+                normalized = normalized.translate(_DIGIT_TRANSLATION)
                 number = int(normalized)
             except (TypeError, ValueError):
                 raise ValueError("کد گروه باید عدد صحیح نامنفی باشد.") from None
@@ -248,7 +297,8 @@ class Mentor(BaseModel):
         if value in {None, ""}:
             return None
         try:
-            normalized = digits.fa_to_en(digits.ar_to_fa(str(value).strip()))
+            normalized = unicodedata.normalize("NFKC", str(value).strip())
+            normalized = normalized.translate(_DIGIT_TRANSLATION)
             if normalized == "":
                 return None
             manager_id = int(normalized)
@@ -277,7 +327,8 @@ class Mentor(BaseModel):
     def _normalize_national_id(cls, value: Optional[str]) -> Optional[str]:
         if value in {None, ""}:
             return None
-        cleaned = digits.fa_to_en(digits.ar_to_fa(str(value).strip()))
+        cleaned = unicodedata.normalize("NFKC", str(value).strip())
+        cleaned = cleaned.translate(_DIGIT_TRANSLATION)
         cleaned = re.sub(r"\D", "", cleaned)
         return cleaned or None
 
