@@ -462,7 +462,7 @@ __all__ = (
     "AvailabilityStatus",
     "Mentor",
     "MentorType",
-    # helpers
+    # stable helper exports
     "normalize_iterable_to_int_set",
     "normalize_mapping_to_int_set",
     "_encode_collections",

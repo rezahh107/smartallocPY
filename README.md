@@ -37,6 +37,10 @@ student-allocation-system/
 - REST API built with FastAPI exposing allocation and health endpoints.
 - Configuration management via environment variables using Pydantic settings.
 
+## Migration
+
+The legacy phase-one mentor module has been fully replaced by the canonical `src.core.models.mentor` module. Import mentor types via `from src.core.models.mentor import Mentor, MentorType, AvailabilityStatus` going forward.
+
 ## Development
 
 - `tests/unit` contains isolated unit tests.
