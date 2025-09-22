@@ -74,6 +74,15 @@ mentor_dict = mentor.to_dict()
 - Enforced coverage: ≥90% on `src/core/models/mentor.py`
 - CI uploads `reports/coverage.xml` and `reports/junit.xml` as artifacts.
 
+### Local CI Parity
+- Gate mentor coverage (≥90%): `make test-gate`
+- Full-package reports (artifacts): `make test-artifacts`
+- Security scan: `make security`
+- Legacy import guard: `make guard`
+- Run all (CI-like): `make ci-local`
+
+Artifacts are written to `reports/coverage.xml` and `reports/junit.xml`.
+
 ## License
 
 This project is provided as-is for educational purposes.
