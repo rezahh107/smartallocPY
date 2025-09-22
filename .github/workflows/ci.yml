@@ -20,7 +20,11 @@ jobs:
       - name: Run tests with coverage
         run: |
           mkdir -p reports
-          pytest -q --cov=src/core/models/mentor.py --cov-report=term-missing --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
+          pytest -q \
+            --cov=src.core.models \
+            --cov-report=term-missing \
+            --cov-report=xml:reports/coverage.xml \
+            --junitxml=reports/junit.xml
       - name: Upload test reports
         uses: actions/upload-artifact@v4
         with:

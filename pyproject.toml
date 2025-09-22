@@ -37,5 +37,5 @@ dev = [
 where = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "-q --cov=src/core/models/mentor.py --cov-report=term-missing --cov-fail-under=90"
+addopts = "-q --cov=src.core.models --cov-report=term-missing --cov-fail-under=90"
 testpaths = ["tests"]
