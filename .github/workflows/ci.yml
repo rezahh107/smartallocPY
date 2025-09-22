@@ -1,5 +1,8 @@
 name: CI
 on: [push, pull_request]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -8,6 +11,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', 'pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
       - run: pip install -U pip
       - run: pip install "pydantic[email]" pytest pytest-cov bandit
       - run: |
@@ -19,7 +27,6 @@ jobs:
           git grep -n "mentor_phase1" -- . ":(exclude)CHANGELOG.md" ":(exclude).github/workflows/*" || true
           test -z "$(git grep -n "mentor_phase1" -- . ":(exclude)CHANGELOG.md" ":(exclude).github/workflows/*")"
 
-      # Gate coverage only on the canonical mentor module
       - name: Gate coverage (mentor module)
         run: |
           pytest -q -o addopts="" \
@@ -27,7 +34,6 @@ jobs:
             --cov-report=term-missing \
             --cov-fail-under=90
 
-      # Full package coverage for artifacts (no gating)
       - name: Run full package coverage (artifacts)
         run: |
           mkdir -p reports
