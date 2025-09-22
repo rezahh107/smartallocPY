@@ -17,5 +17,14 @@ jobs:
         run: |
           git grep -n "mentor_phase1" -- . ":(exclude)CHANGELOG.md" ":(exclude).github/workflows/*" || true
           test -z "$(git grep -n "mentor_phase1" -- . ":(exclude)CHANGELOG.md" ":(exclude).github/workflows/*")"
-      - run: pytest
-      - run: bandit -q -r src/core/models -x tests
+      - name: Run tests with coverage
+        run: |
+          mkdir -p reports
+          pytest -q --cov=src/core/models/mentor.py --cov-report=term-missing --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: reports/
+      - name: Bandit
+        run: bandit -q -r src/core/models -x tests
