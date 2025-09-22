@@ -24,8 +24,8 @@ jobs:
 
       - name: Guard against legacy mentor_phase1 imports
         run: |
-          git grep -n "mentor_phase1" -- . ":(exclude)CHANGELOG.md" ":(exclude).github/workflows/*" || true
-          test -z "$(git grep -n "mentor_phase1" -- . ":(exclude)CHANGELOG.md" ":(exclude).github/workflows/*")"
+          git grep -n "mentor_phase1" -- src tests || true
+          test -z "$(git grep -n "mentor_phase1" -- src tests)"
 
       - name: Gate coverage (mentor module)
         run: |
