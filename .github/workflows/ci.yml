@@ -9,6 +9,9 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -U pip
-      - run: pip install pydantic pytest pytest-cov bandit
+      - run: pip install "pydantic[email]" pytest pytest-cov bandit
+      - run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
       - run: pytest
       - run: bandit -q -r src/core/models -x tests
