@@ -62,7 +62,7 @@ def test_alias_fields_and_normalization() -> None:
         mobile="۰۹۱۲۳۴۵۶۷۸۹",
     )
 
-    assert mentor.allowed_groups == [201]
+    assert mentor.allowed_groups == frozenset({201})
     assert mentor.capacity == 80
     assert mentor.mobile == "09123456789"
 
@@ -226,3 +226,40 @@ def test_get_workload_percentage() -> None:
     )
 
     assert mentor.get_workload_percentage() == 25.0
+
+
+def test_to_dict_encodes_sets() -> None:
+    """Ensure to_dict returns JSON-friendly lists for set fields."""
+
+    mentor = Mentor(
+        mentor_id=12,
+        first_name="سمیه",
+        last_name="مرادی",
+        gender=0,
+        mentor_type=MentorType.NORMAL,
+        allowed_groups=[305, 101],
+        special_schools=[91234, 81234],
+        manager_id="۴۲",
+    )
+
+    payload = mentor.to_dict(by_alias=False)
+
+    assert payload["allowed_groups"] == [101, 305]
+    assert payload["special_schools"] == [81234, 91234]
+    assert payload["manager_id"] == 42
+
+
+def test_manager_id_alias_variants() -> None:
+    """Persian variants of manager_id aliases should populate the field."""
+
+    mentor = Mentor(
+        mentor_id=7,
+        first_name="فرزاد",
+        last_name="جمشیدی",
+        gender=1,
+        mentor_type=MentorType.NORMAL,
+        allowed_groups=[101],
+        **{"شناسه‌ٔ مدیر": "15"},
+    )
+
+    assert mentor.manager_id == 15

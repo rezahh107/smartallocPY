@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import List, Optional, Protocol
-
 import re
-from persiantools import characters, digits
+import unicodedata
+from collections.abc import Iterable, Mapping
+from enum import Enum
+from typing import Any, FrozenSet, Optional, Protocol
+
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     EmailStr,
@@ -19,6 +21,51 @@ from pydantic import (
 
 _MOBILE_PATTERN = re.compile(r"^09\d{9}$")
 _NATIONAL_ID_PATTERN = re.compile(r"^\d{10}$")
+
+_DIGIT_TRANSLATION = str.maketrans(
+    {
+        "۰": "0",
+        "۱": "1",
+        "۲": "2",
+        "۳": "3",
+        "۴": "4",
+        "۵": "5",
+        "۶": "6",
+        "۷": "7",
+        "۸": "8",
+        "۹": "9",
+        "٠": "0",
+        "١": "1",
+        "٢": "2",
+        "٣": "3",
+        "٤": "4",
+        "٥": "5",
+        "٦": "6",
+        "٧": "7",
+        "٨": "8",
+        "٩": "9",
+    }
+)
+
+_ARABIC_TO_PERSIAN_CHARACTERS = str.maketrans(
+    {
+        "ي": "ی",
+        "ى": "ی",
+        "ﻱ": "ی",
+        "ﻲ": "ی",
+        "ﻳ": "ی",
+        "ك": "ک",
+        "ﻙ": "ک",
+        "ﻛ": "ک",
+        "ﻜ": "ک",
+        "ة": "ه",
+        "ۀ": "هٔ",
+        "ؤ": "و",
+        "إ": "ا",
+        "أ": "ا",
+        "ٱ": "ا",
+    }
+)
 
 
 class MentorType(str, Enum):
@@ -49,7 +96,8 @@ class StudentLike(Protocol):
 def _normalize_name(value: str) -> str:
     """Normalize Persian names by unifying script and spaces."""
 
-    normalized = characters.ar_to_fa(value or "")
+    text = unicodedata.normalize("NFKC", value or "")
+    normalized = text.translate(_ARABIC_TO_PERSIAN_CHARACTERS)
     normalized = " ".join(normalized.split())
     return normalized
 
@@ -59,7 +107,8 @@ def _normalize_mobile(value: Optional[str]) -> Optional[str]:
 
     if value is None:
         return None
-    digits_only = digits.fa_to_en(digits.ar_to_fa(str(value).strip()))
+    digits_only = unicodedata.normalize("NFKC", str(value).strip())
+    digits_only = digits_only.translate(_DIGIT_TRANSLATION)
     digits_only = re.sub(r"\D", "", digits_only)
     if digits_only.startswith("+98"):
         digits_only = "0" + digits_only[3:]
@@ -93,8 +142,8 @@ class Mentor(BaseModel):
     last_name: str = Field(..., description="نام خانوادگی")
     gender: int = Field(..., description="جنسیت: ۰ برای خانم، ۱ برای آقا")
     mentor_type: MentorType = Field(..., description="نوع منتور")
-    special_schools: List[int] = Field(
-        default_factory=list, description="کد مدارس تحت پوشش (حداکثر ۴)"
+    special_schools: FrozenSet[int] = Field(
+        default_factory=frozenset, description="کد مدارس تحت پوشش (حداکثر ۴)"
     )
     capacity: int = Field(
         default=60,
@@ -107,10 +156,20 @@ class Mentor(BaseModel):
         ge=0,
         description="تعداد تخصیص‌های فعلی",
     )
-    allowed_groups: List[int] = Field(
-        default_factory=list,
+    allowed_groups: FrozenSet[int] = Field(
+        default_factory=frozenset,
         alias="subject_areas",
         description="گروه‌های مجاز",
+    )
+    manager_id: Optional[int] = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "manager_id",
+            "شناسه مدیر",
+            "شناسهٔ مدیر",
+            "شناسه‌ٔ مدیر",
+        ),
+        description="شناسهٔ مدیر مرتبط در سامانه",
     )
     manager_name: Optional[str] = Field(None, description="مدیر مستقیم")
     is_active: bool = Field(default=True, description="وضعیت فعال بودن")
@@ -153,17 +212,38 @@ class Mentor(BaseModel):
             raise ValueError("جنسیت باید یکی از مقادیر {۰، ۱} باشد.")
         return value
 
+    @field_validator("special_schools", mode="before")
+    @classmethod
+    def _normalize_special_schools(cls, value: Any) -> FrozenSet[int]:
+        if value in (None, ""):
+            return frozenset()
+        if isinstance(value, str):
+            raw_items = [value]
+        elif isinstance(value, Iterable):
+            raw_items = list(value)
+        else:
+            raw_items = [value]
+        if len(raw_items) > 4:
+            raise ValueError("حداکثر چهار مدرسه می‌تواند تعریف شود.")
+        cleaned: list[int] = []
+        for code in raw_items:
+            try:
+                normalized = unicodedata.normalize("NFKC", str(code).strip())
+                normalized = normalized.translate(_DIGIT_TRANSLATION)
+                number = int(normalized)
+            except (TypeError, ValueError):
+                raise ValueError("کد مدرسه باید عدد صحیح مثبت باشد.") from None
+            if number <= 0:
+                raise ValueError("کد مدرسه باید عدد صحیح مثبت باشد.")
+            cleaned.append(number)
+        return frozenset(cleaned)
+
     @field_validator("special_schools")
     @classmethod
-    def _validate_special_schools(cls, value: List[int]) -> List[int]:
+    def _validate_special_schools(cls, value: FrozenSet[int]) -> FrozenSet[int]:
         if len(value) > 4:
             raise ValueError("حداکثر چهار مدرسه می‌تواند تعریف شود.")
-        cleaned: List[int] = []
-        for code in value:
-            if not isinstance(code, int) or code <= 0:
-                raise ValueError("کد مدرسه باید عدد صحیح مثبت باشد.")
-            cleaned.append(code)
-        return cleaned
+        return value
 
     @field_validator("capacity")
     @classmethod
@@ -182,13 +262,51 @@ class Mentor(BaseModel):
             raise ValueError("تعداد تخصیص فعلی نباید از ظرفیت بیشتر باشد.")
         return value
 
+    @field_validator("allowed_groups", mode="before")
+    @classmethod
+    def _normalize_allowed_groups(cls, value: Any) -> FrozenSet[int]:
+        if value in (None, ""):
+            return frozenset()
+        if isinstance(value, str):
+            raw_items = [value]
+        elif isinstance(value, Iterable):
+            raw_items = list(value)
+        else:
+            raw_items = [value]
+        cleaned: list[int] = []
+        for code in raw_items:
+            try:
+                normalized = unicodedata.normalize("NFKC", str(code).strip())
+                normalized = normalized.translate(_DIGIT_TRANSLATION)
+                number = int(normalized)
+            except (TypeError, ValueError):
+                raise ValueError("کد گروه باید عدد صحیح نامنفی باشد.") from None
+            if number < 0:
+                raise ValueError("کد گروه باید عدد صحیح نامنفی باشد.")
+            cleaned.append(number)
+        return frozenset(cleaned)
+
     @field_validator("allowed_groups")
     @classmethod
-    def _validate_allowed_groups(cls, value: List[int]) -> List[int]:
-        for code in value:
-            if not isinstance(code, int) or code < 0:
-                raise ValueError("کد گروه باید عدد صحیح نامنفی باشد.")
+    def _validate_allowed_groups(cls, value: FrozenSet[int]) -> FrozenSet[int]:
         return value
+
+    @field_validator("manager_id", mode="before")
+    @classmethod
+    def _normalize_manager_id(cls, value: Any) -> Optional[int]:
+        if value in {None, ""}:
+            return None
+        try:
+            normalized = unicodedata.normalize("NFKC", str(value).strip())
+            normalized = normalized.translate(_DIGIT_TRANSLATION)
+            if normalized == "":
+                return None
+            manager_id = int(normalized)
+        except (TypeError, ValueError):
+            raise ValueError("شناسهٔ مدیر باید عدد صحیح نامنفی باشد.") from None
+        if manager_id < 0:
+            raise ValueError("شناسهٔ مدیر باید عدد صحیح نامنفی باشد.")
+        return manager_id
 
     @field_validator("mobile", mode="before")
     @classmethod
@@ -209,7 +327,8 @@ class Mentor(BaseModel):
     def _normalize_national_id(cls, value: Optional[str]) -> Optional[str]:
         if value in {None, ""}:
             return None
-        cleaned = digits.fa_to_en(digits.ar_to_fa(str(value).strip()))
+        cleaned = unicodedata.normalize("NFKC", str(value).strip())
+        cleaned = cleaned.translate(_DIGIT_TRANSLATION)
         cleaned = re.sub(r"\D", "", cleaned)
         return cleaned or None
 
@@ -256,8 +375,7 @@ class Mentor(BaseModel):
             return False
         if self.gender != getattr(student, "gender", None):
             return False
-        allowed_groups = set(self.allowed_groups)
-        if getattr(student, "group_code", None) not in allowed_groups:
+        if getattr(student, "group_code", None) not in self.allowed_groups:
             return False
 
         is_graduate = getattr(student, "edu_status", None) == 0
@@ -269,8 +387,7 @@ class Mentor(BaseModel):
             if student_type != 1:
                 return False
             student_school = getattr(student, "school_code", None)
-            special_schools = set(self.special_schools)
-            if student_school is None or student_school not in special_schools:
+            if student_school is None or student_school not in self.special_schools:
                 return False
         else:
             if student_type == 1:
@@ -284,6 +401,45 @@ class Mentor(BaseModel):
         if self.capacity <= 0:
             return 0.0
         return round((self.current_load / float(self.capacity)) * 100.0, 2)
+
+    def to_dict(
+        self,
+        *,
+        by_alias: bool = True,
+        exclude_none: bool = True,
+    ) -> dict[str, Any]:
+        """Return a JSON-friendly dictionary representation.
+
+        Parameters
+        ----------
+        by_alias:
+            If ``True``, field aliases such as ``max_students`` are used.
+        exclude_none:
+            When ``True``, keys with ``None`` values are omitted from the output.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary safe for JSON serialization with sets converted to
+            sorted lists.
+        """
+
+        data = self.model_dump(by_alias=by_alias, exclude_none=exclude_none)
+        return _encode_collections(data)
+
+
+def _encode_collections(value: Any) -> Any:
+    """Recursively convert sets to sorted lists for JSON encoding."""
+
+    if isinstance(value, Mapping):
+        return {key: _encode_collections(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_encode_collections(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_encode_collections(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return sorted(_encode_collections(item) for item in value)
+    return value
 
 
 __all__ = ["Mentor", "MentorType", "AvailabilityStatus", "StudentLike"]
