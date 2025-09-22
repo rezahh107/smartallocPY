@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from enum import Enum
 from typing import Any, FrozenSet, Optional, Protocol
 
@@ -16,6 +16,14 @@ from pydantic import (
     Field,
     computed_field,
     field_validator,
+)
+
+
+from .mentor_legacy_helpers import (
+    _encode_collections as _legacy_encode_collections,
+    _normalize_code_collection as _legacy_normalize_code_collection,
+    _normalize_int as _legacy_normalize_int,
+    _normalize_optional_int as _legacy_normalize_optional_int,
 )
 
 
@@ -428,18 +436,34 @@ class Mentor(BaseModel):
         return _encode_collections(data)
 
 
-def _encode_collections(value: Any) -> Any:
-    """Recursively convert sets to sorted lists for JSON encoding."""
+# Legacy helper compatibility -------------------------------------------------
 
-    if isinstance(value, Mapping):
-        return {key: _encode_collections(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_encode_collections(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_encode_collections(item) for item in value)
-    if isinstance(value, (set, frozenset)):
-        return sorted(_encode_collections(item) for item in value)
-    return value
+_normalize_int = _legacy_normalize_int
+_normalize_optional_int = _legacy_normalize_optional_int
+_normalize_code_collection = _legacy_normalize_code_collection
 
 
-__all__ = ["Mentor", "MentorType", "AvailabilityStatus", "StudentLike"]
+def normalize_iterable_to_int_set(value: Any, field_title: str) -> FrozenSet[int]:
+    """Normalize an iterable of codes into a frozen set of integers."""
+
+    return _legacy_normalize_code_collection(value, field_title)
+
+
+def normalize_mapping_to_int_set(value: Any, field_title: str) -> FrozenSet[int]:
+    """Normalize a mapping of codes into a frozen set of enabled integer keys."""
+
+    return _legacy_normalize_code_collection(value, field_title)
+
+
+_encode_collections = _legacy_encode_collections
+
+
+__all__ = (
+    "AvailabilityStatus",
+    "Mentor",
+    "MentorType",
+    # helpers
+    "normalize_iterable_to_int_set",
+    "normalize_mapping_to_int_set",
+    "_encode_collections",
+)
