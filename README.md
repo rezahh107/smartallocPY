@@ -41,6 +41,25 @@ student-allocation-system/
 
 The legacy phase-one mentor module has been fully replaced by the canonical `src.core.models.mentor` module. Import mentor types via `from src.core.models.mentor import Mentor, MentorType, AvailabilityStatus` going forward.
 
+```python
+from src.core.models.mentor import Mentor, MentorType
+
+mentor = Mentor(
+    mentor_id=101,
+    first_name="Example",
+    last_name="Mentor",
+    gender=1,
+    mentor_type=MentorType.NORMAL,
+    manager_id=42,
+    special_schools={10, 20},
+    allowed_groups={7, 8},
+)
+
+mentor_dict = mentor.to_dict()
+# mentor_dict["special_schools"] == [10, 20]
+# mentor_dict["allowed_groups"] == [7, 8]
+```
+
 ## Development
 
 - `tests/unit` contains isolated unit tests.

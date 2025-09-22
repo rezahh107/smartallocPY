@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.1.1] - 2024-05-27
+## [0.1.1] - 2025-09-22
 ### Changed
 - Renamed `src.core.models.mentor_phase1` to `src.core.models.mentor` as the canonical mentor model module.
 - Updated the public API exports to `from src.core.models.mentor import Mentor, MentorType, AvailabilityStatus`.
