@@ -50,4 +50,4 @@ jobs:
           path: reports/
 
       - name: Bandit
-        run: bandit -q -r src/core/models -x tests
+        run: bandit -r src

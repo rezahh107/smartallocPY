@@ -2,4 +2,5 @@ pydantic>=2
 pytest
 pytest-cov
 bandit
+hypothesis
 email-validator>=2.1.0.post1
