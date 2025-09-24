@@ -15,7 +15,13 @@ dependencies = [
   "pydantic>=2.0",
   "pydantic[email]",
   "pytest",
-  "pytest-cov"
+  "pytest-cov",
+  "sqlalchemy>=2.0",
+  "alembic>=1.12",
+  "prometheus-client>=0.17",
+  "hypothesis>=6.0",
+  "psycopg[binary]>=3.1",
+  "pyyaml>=6.0"
 ]
 requires-python = ">=3.11"
 
@@ -23,5 +29,20 @@ requires-python = ">=3.11"
 where = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "-q --cov=src.core.models.mentor --cov-report=term-missing --cov-fail-under=90"
+addopts = "-q --cov=src/domain/counter --cov=src/infrastructure/counter --cov=src/api/counter_api.py --cov=scripts/backfill_counters.py --cov=assign_counter.py --cov-report=term-missing --cov-fail-under=95"
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = [
+  "assign_counter.py",
+  "scripts/backfill_counters.py",
+  "scripts/post_migration_checks.py",
+  "scripts/generate_spec_matrix.py",
+  "scripts/serve_metrics.py",
+  "src/api/counter_api.py",
+  "src/domain/counter",
+  "src/infrastructure/counter",
+]
+enable_error_code = ["ignore-without-code"]

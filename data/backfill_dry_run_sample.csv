@@ -1,0 +1,3 @@
+national_id,code,message,details
+9999999999,DRY_RUN_MISSING,درای-ران: بدون ایجاد رکورد جدید.,{"gender": "1"}
+54-373,SEQUENCE_UPDATE_DRY_RUN,درای-ران: بروزرسانی توالی لازم است.,{"year_code": "54", "prefix": "373", "current_next_seq": null, "expected_next_seq": 2}

@@ -1,0 +1,28 @@
+apiVersion: 1
+groups:
+  - name: counter-service
+    rules:
+      - alert: CounterOverflowDetected
+        expr: sum(counter_overflow_total) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Counter sequence overflow detected"
+          description: "Investigate the sequence capacity for the affected year/prefix."
+      - alert: CounterApiErrorsSpike
+        expr: sum(rate(counter_conflict_total{type="ledger_exception"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Counter API conflicts escalating"
+          description: "Check database connectivity and concurrency conditions."
+      - alert: CounterMetricsExporterDown
+        expr: counter_metrics_http_started < 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus exporter not reporting"
+          description: "Ensure the counter CLI/daemon started the metrics HTTP server."

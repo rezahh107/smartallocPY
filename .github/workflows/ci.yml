@@ -17,7 +17,7 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', 'pyproject.toml') }}
           restore-keys: ${{ runner.os }}-pip-
       - run: pip install -U pip
-      - run: pip install "pydantic[email]" pytest pytest-cov bandit
+      - run: pip install "pydantic[email]" pytest pytest-cov bandit mypy
       - run: |
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
@@ -43,11 +43,17 @@ jobs:
             --cov-report=xml:reports/coverage.xml \
             --junitxml=reports/junit.xml
 
+      - name: Counter service schema checks
+        run: make ci-checks
+
+      - name: Counter fault-injection suite
+        run: make fault-tests
+
       - name: Upload test reports
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
           path: reports/
 
-      - name: Bandit
-        run: bandit -r src
+      - name: Static analysis (Bandit + mypy)
+        run: make static-checks
