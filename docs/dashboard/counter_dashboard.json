@@ -1,0 +1,53 @@
+{
+  "title": "Counter Service - Generate vs Reuse",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Generated vs Reused Counters",
+      "targets": [
+        {
+          "expr": "sum(rate(counter_generated_total[5m])) by (year, gender)",
+          "legendFormat": "Generate year={{year}} gender={{gender}}"
+        },
+        {
+          "expr": "sum(rate(counter_reuse_total[5m])) by (year, gender)",
+          "legendFormat": "Reuse year={{year}} gender={{gender}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Conflicts and Overflow",
+      "targets": [
+        {
+          "expr": "sum(rate(counter_conflict_total[5m])) by (type)",
+          "legendFormat": "Conflict {{type}}"
+        },
+        {
+          "expr": "sum(rate(counter_overflow_total[5m])) by (year, gender)",
+          "legendFormat": "Overflow year={{year}} gender={{gender}}"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Backfill Mismatches",
+      "targets": [
+        {
+          "expr": "counter_backfill_mismatch_total",
+          "legendFormat": "Mismatch {{type}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Metrics Exporter Health",
+      "targets": [
+        {
+          "expr": "counter_metrics_http_started",
+          "legendFormat": "Exporter"
+        }
+      ]
+    }
+  ]
+}

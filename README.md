@@ -38,6 +38,67 @@ student-allocation-system/
 - Allocation service for pairing students with mentors.
 - REST API built with FastAPI exposing allocation and health endpoints.
 - Configuration management via environment variables using Pydantic settings.
+- Deterministic counter service with Postgres-backed ledger, Prometheus metrics, and structured logging.
+
+## Counter Service (Phase 2)
+
+Run migrations with Alembic once the database URL and `PII_HASH_SALT` are exported:
+
+```bash
+alembic upgrade head
+```
+
+Assign or reuse counters from the CLI (year code is injected explicitly and validated by the API facade):
+
+```bash
+export DATABASE_URL=postgresql+psycopg://user:pass@localhost/db
+export PII_HASH_SALT="super-secret"
+export COUNTER_METRICS_PORT=9102
+export COUNTER_ENV=prod
+python assign_counter.py 1234567890 0 54
+```
+
+<!-- README excerpt: CounterService usage -->
+```python
+from sqlalchemy import create_engine
+
+from src.domain.counter.service import CounterService
+from src.infrastructure.counter.metrics import PrometheusCounterMetrics
+from src.infrastructure.counter.postgres_repo import PostgresCounterRepository
+from src.infrastructure.counter.year_provider import FixedAcademicYearProvider
+
+engine = create_engine("postgresql+psycopg://user:pass@localhost/db", future=True)
+service = CounterService(
+    repository=PostgresCounterRepository(engine),
+    year_provider=FixedAcademicYearProvider("54"),
+    metrics=PrometheusCounterMetrics(),
+    pii_hash_salt="super-secret",
+)
+counter = service.get_or_create("1234567890", 1)
+print(counter)
+```
+
+The service exports Prometheus counters (`counter_reuse_total`, `counter_generated_total`, `counter_conflict_total`, `counter_overflow_total`, `counter_backfill_mismatch_total`) and the gauge `counter_last_sequence_position`. Sample Grafana panels and alert rules live under `docs/dashboard/`.
+
+### Counter service operations playbook
+
+- Metrics exporter: every CLI/daemon invocation automatically boots a Prometheus HTTP server on `COUNTER_METRICS_PORT` and flips the health gauge `counter_metrics_http_started` to `1`. Scrape `http://127.0.0.1:${COUNTER_METRICS_PORT}/metrics` to confirm counters such as `counter_generated_total` advance during assignments. Use `make serve-metrics` to run a long-lived exporter for dashboards during local testing.
+- Fault drills: `make fault-tests` exercises duplicate-counter/national-id remediation paths and asserts conflict logs/metrics are emitted.
+- Schema safety: `make ci-checks` provisions a disposable SQLite database, applies Alembic migrations, runs `scripts/post_migration_checks.py`, regenerates the spec matrix, and executes the counter test-suite with a hard coverage gate of 95%.
+- Backfill tooling: `make backfill-dry-run` keeps the ledger untouched while writing mismatch CSVs. Re-run with `--dry-run` omitted to apply reconciled sequences idempotently.
+- Spec compliance tracking: regenerate the requirement-to-test matrix with `make spec-matrix`, which updates `reports/spec_matrix.md` directly from the authoritative mapping.
+- Static analysis: `make static-checks` enforces the Bandit security scan and strict mypy type-checks on the counter stack.
+
+Alerting assets are published under `docs/dashboard/alerts/` (validated YAML) and include rules for overflow, conflict spikes, and exporter downtime.
+
+<!-- README excerpt: assign_counter operator workflow -->
+```bash
+make counter-tests
+make migrate
+python scripts/backfill_counters.py data/backfill_sample.csv 54 --dry-run --report reports/backfill_report.csv
+python scripts/post_migration_checks.py
+python assign_counter.py 1234567890 0 54
+```
 
 ## Migration
 
